@@ -1,4 +1,3 @@
-import LookupTable.{getGeohashUDF, spark}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions.{col, lit}
 import org.locationtech.geomesa.utils.geohash.GeoHash
@@ -40,24 +39,20 @@ object WriteJob extends App {
 
   private val joinUDF = spark.udf.register("join", join)
 
-  private val substringUDF = spark.udf.register(
-    "substring",
-    (geohash: String, prec: Int) ⇒ geohash match {
-        case _ if geohash == null ⇒ null
-        case _ if geohash.length >= prec ⇒ geohash.substring(0, prec)
-        case _ ⇒ geohash
-    }
-  )
 
   private val dfWithValidGeohashes =
     df.withColumn("valid_geohash", joinUDF(col("geohash")))
-      .withColumn("geohash_2", substringUDF(col("valid_geohash"), lit(2)))
-      .withColumn("geohash_3", substringUDF(col("valid_geohash"), lit(3)))
-      .withColumn("geohash_4", substringUDF(col("valid_geohash"), lit(4)))
+      .drop("geohash")
 
-  dfWithValidGeohashes.write
-    .partitionBy("geohash_2", "geohash_3", "geohash_4")
+  dfWithValidGeohashes
+    .withColumn("geohash_1", col("valid_geohash").substr(lit(0), lit(1)))
+    .withColumn("geohash_2", col("valid_geohash").substr(lit(0), lit(2)))
+    .withColumn("geohash_3", col("valid_geohash").substr(lit(0), lit(3)))
+    .withColumn("geohash_4", col("valid_geohash").substr(lit(0), lit(4)))
+    .write
     .mode("overwrite")
-    .parquet("output")
+    .partitionBy("geohash_1", "geohash_2", "geohash_3", "geohash_4")
+    .csv("output")
+
 
 }
